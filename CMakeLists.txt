@@ -19,3 +19,11 @@ target_compile_options(itch_replay PRIVATE -Wall -Wextra)
 if(HAVE_MARCH_NATIVE)
     target_compile_options(itch_replay PRIVATE $<$<CONFIG:Release>:-march=native>)
 endif()
+
+enable_testing()
+
+add_executable(itch_tests tests/test_platform.cpp)
+target_include_directories(itch_tests PRIVATE src tests)
+target_compile_options(itch_tests PRIVATE -Wall -Wextra)
+
+add_test(NAME unit COMMAND itch_tests)
