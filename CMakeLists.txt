@@ -22,7 +22,7 @@ endif()
 
 enable_testing()
 
-add_executable(itch_tests tests/test_platform.cpp tests/test_messages.cpp)
+add_executable(itch_tests tests/test_platform.cpp tests/test_messages.cpp tests/test_symbol_table.cpp)
 target_include_directories(itch_tests PRIVATE src tests)
 target_compile_options(itch_tests PRIVATE -Wall -Wextra)
 
