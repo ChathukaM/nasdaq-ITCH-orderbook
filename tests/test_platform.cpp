@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "platform.hpp"
+#include "platform.h"
 
 namespace {
 
