@@ -212,7 +212,18 @@ int replay(const itch::MappedFile& file, const std::vector<std::string>& watch,
                 ull(r.crossed_symbols));
     for (const auto& example : r.crossed_examples) std::printf("%s\n", example.c_str());
 
+    std::size_t active_books = 0, symbols_with_both_sides = 0;
+    for (std::size_t l = 0; l < itch::SymbolTable::kLocateDomain; ++l) {
+        const auto& b = handler.book(static_cast<itch::StockLocate>(l));
+        if (!b.bids().empty() || !b.asks().empty()) ++active_books;
+        if (b.has_bid() && b.has_ask()) ++symbols_with_both_sides;
+    }
+
     const auto& rec = r.snapshot_reconciliation;
+    std::printf("\n--- books at end of replay ---\n");
+    std::printf("symbols with a book:  %zu\n", active_books);
+    std::printf("two-sided books:      %zu\n", symbols_with_both_sides);
+
     std::printf("\n--- 15:00 snapshot ---\n");
     std::printf("live orders:          %llu\n", ull(r.snapshot_orders));
     std::printf("levels checked:       %llu\n", ull(rec.levels_checked));

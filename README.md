@@ -18,14 +18,15 @@ memory and applying every event in sequence. That state, not the byte parsing, i
 
 ## Results
 
-**30 July 2019, full session, single thread**
+**30 July 2019, full session, single thread, all 8,849 listed symbols**
 
 | | |
 |---|---|
 | Messages | 282,229,684 |
 | Orders added | 125,460,750 |
 | Executions | 7,717,995 (921,453,624 shares) |
-| Symbols | 8,849 |
+| Symbols in directory | 8,849 |
+| Symbols with a live two-sided book | 8,841 concurrently |
 | Replay time | 32.2 s (**8.8 M msg/s**) |
 | Book update cost | **68 ns/message** |
 | Book state | ~190 MB (see below) |
@@ -59,10 +60,17 @@ Both containers were chosen naively at first, then replaced and measured. The bo
 fingerprint (below) was identical before and after, so the speedup came with no behavioural
 change.
 
-| | Book cost | Replay |
-|---|---|---|
-| `std::unordered_map` + `std::map` | 185 ns/msg | 3.6 M msg/s |
-| Flat open-addressed map + sorted level arrays | **68 ns/msg** | **8.8 M msg/s** |
+Two measurement bases, kept separate because they answer different questions. The first
+isolates the component that changed; the second is what the whole program actually does.
+
+| Measurement | Before | After | Ratio |
+|---|---|---|---|
+| Book update cost (60M-message benchmark, like-for-like) | 185.1 ns/msg | **68.1 ns/msg** | **2.7x** |
+| Full-day replay, wall clock | 77.6 s | **32.4 s** | **2.4x** |
+| Full-day replay, throughput | 3.64 M msg/s | **8.72 M msg/s** | **2.4x** |
+
+The component improved by 2.7x but the program by 2.4x, because book maintenance is 93% of
+runtime rather than all of it.
 
 Process RSS is not quoted as a comparison: the input is memory-mapped, so resident file pages
 dominate it (~6 GB either way) and swamp the structures themselves. The flat containers are
@@ -108,6 +116,25 @@ a wrong implementation would violate.
 The last is the strongest: it discards the incrementally maintained levels, rebuilds every one
 from scratch by grouping the order map, and compares. Any drift accumulated over 282 million
 updates would show up.
+
+Books are maintained for every symbol concurrently, not one at a time -- 8,841 of the 8,849
+listed symbols hold a two-sided book simultaneously by mid-session (the remaining 8 never
+traded). Top of book was cross-checked against an independent Python reconstruction sharing no
+code with this implementation, across the liquidity spectrum, at message 200,000,000:
+
+| Symbol | Bid | Ask | Match |
+|---|---|---|---|
+| SPY | 3,500 @ 301.0400 | 2,200 @ 301.0500 | exact |
+| AAPL | 100 @ 209.7100 | 205 @ 209.7200 | exact |
+| MSFT | 1,300 @ 141.1400 | 645 @ 141.1600 | exact |
+| ZYXI | 100 @ 8.3600 | 100 @ 8.3900 | exact |
+| BIQI | 35 @ 0.8000 | 93 @ 0.6579 | exact |
+| CCIH | 10 @ 2.0000 | 300 @ 0.0100 | exact |
+| ATEST | 100 @ 18.0200 | 100 @ 32.0800 | exact |
+
+Per-symbol routing is cheap by design: every message carries a 2-byte stock locate, so books
+live in a flat array indexed by it. The expensive shared state is the order map, which is
+necessarily global -- order reference numbers are exchange-wide, not per-symbol.
 
 **Book state fingerprint:** `0xcb0e7562cbdb2217` — a 64-bit digest of the complete book at
 15:00, iterated in canonical order so it describes state rather than container layout. Every
