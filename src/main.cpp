@@ -54,25 +54,25 @@ void print_book(const itch::BookHandler& handler, itch::StockLocate locate, int 
     std::printf("\n%.*s  (locate %u)\n", static_cast<int>(symbol.size()), symbol.data(), locate);
     std::printf("%12s %10s  |  %-10s %-12s\n", "bid size", "bid", "ask", "ask size");
 
-    auto bid = book.bids().rbegin();
-    auto ask = book.asks().begin();
+    const auto& bids = book.bids().all();
+    const auto& asks = book.asks().all();
     for (int i = 0; i < depth; ++i) {
-        const bool has_bid = bid != book.bids().rend();
-        const bool has_ask = ask != book.asks().end();
+        const bool has_bid = std::size_t(i) < bids.size();
+        const bool has_ask = std::size_t(i) < asks.size();
         if (!has_bid && !has_ask) break;
 
         if (has_bid) {
-            itch::format_price(price, sizeof price, bid->first);
-            std::printf("%12llu %10s", ull(bid->second.shares), price);
-            ++bid;
+            const auto& level = bids[bids.size() - 1 - std::size_t(i)];
+            itch::format_price(price, sizeof price, level.price);
+            std::printf("%12llu %10s", ull(level.shares), price);
         } else {
             std::printf("%12s %10s", "", "");
         }
         std::printf("  |  ");
         if (has_ask) {
-            itch::format_price(price, sizeof price, ask->first);
-            std::printf("%-10s %-12llu", price, ull(ask->second.shares));
-            ++ask;
+            const auto& level = asks[asks.size() - 1 - std::size_t(i)];
+            itch::format_price(price, sizeof price, level.price);
+            std::printf("%-10s %-12llu", price, ull(level.shares));
         }
         std::printf("\n");
     }

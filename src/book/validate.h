@@ -45,17 +45,20 @@ inline std::uint64_t fingerprint_books(const BookHandler& handler, std::size_t l
         if (book.bids().empty() && book.asks().empty()) continue;
 
         fp.mix(locate);
-        for (const auto& [price, level] : book.bids()) {
+        for (const PriceLevel& level : book.bids().all()) {
             fp.mix(0x42);
-            fp.mix(price);
+            fp.mix(level.price);
             fp.mix(level.shares);
             fp.mix(level.order_count);
         }
-        for (const auto& [price, level] : book.asks()) {
+        // Asks are stored best-first (descending) for insertion cost; the digest walks
+        // them ascending so it describes book state, not container layout.
+        const auto& asks = book.asks().all();
+        for (auto it = asks.rbegin(); it != asks.rend(); ++it) {
             fp.mix(0x53);
-            fp.mix(price);
-            fp.mix(level.shares);
-            fp.mix(level.order_count);
+            fp.mix(it->price);
+            fp.mix(it->shares);
+            fp.mix(it->order_count);
         }
     }
     return fp.value();
@@ -83,21 +86,21 @@ inline Reconciliation reconcile(const BookHandler& handler, std::size_t locate_d
     std::unordered_map<Key, Level, KeyHash> rebuilt;
     rebuilt.reserve(handler.live_orders());
 
-    for (const auto& [ref, order] : handler.orders()) {
+    handler.orders().for_each([&](OrderRef ref, const Order& order) {
         (void)ref;
         Level& level = rebuilt[Key{order.locate, order.side == Side::Buy ? 'B' : 'S', order.price}];
         level.shares += order.shares;
         ++level.order_count;
         ++result.orders_checked;
-    }
+    });
 
     for (std::size_t locate = 0; locate < locate_domain; ++locate) {
         const OrderBook& book = handler.book(static_cast<StockLocate>(locate));
-        const auto check = [&](const OrderBook::Levels& levels, char side) {
-            for (const auto& [price, level] : levels) {
+        const auto check = [&](const auto& levels, char side) {
+            for (const PriceLevel& level : levels.all()) {
                 ++result.levels_checked;
                 const auto it =
-                    rebuilt.find(Key{static_cast<StockLocate>(locate), side, price});
+                    rebuilt.find(Key{static_cast<StockLocate>(locate), side, level.price});
                 const std::uint64_t shares = it == rebuilt.end() ? 0 : it->second.shares;
                 const std::uint32_t count = it == rebuilt.end() ? 0 : it->second.order_count;
                 if (shares != level.shares) ++result.level_share_mismatches;

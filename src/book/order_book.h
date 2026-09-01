@@ -1,70 +1,63 @@
 #pragma once
 
 #include <cstdint>
-#include <map>
 
+#include "book/price_levels.h"
 #include "itch/messages.h"
 
 namespace itch {
 
-// A price level aggregates the orders resting at one price. Individual orders are
-// not stored here -- the order map already records each order's price, so a list
-// per level would duplicate that. Step 9 adds one, since queue position needs it.
-struct Level {
-    std::uint64_t shares = 0;
-    std::uint32_t order_count = 0;
-};
+// A price level aggregates the orders resting at one price. Individual orders are not
+// stored here -- the order map already records each order's price, so a list per level
+// would duplicate that. The queue analyser keeps its own, since queue position needs
+// the ordering within a level.
+using Level = PriceLevel;
 
-// Bids and asks for a single symbol. Both sides are ordered ascending by price;
-// the best bid is therefore the last entry and the best ask the first.
 class OrderBook {
 public:
-    using Levels = std::map<Price, Level>;
-
     void add(Side side, Price price, Shares shares) {
-        Level& level = levels(side)[price];
-        level.shares += shares;
-        ++level.order_count;
+        if (side == Side::Buy) {
+            bids_.add(price, shares);
+        } else {
+            asks_.add(price, shares);
+        }
     }
 
-    // Shares leaving a level without the order itself leaving: partial execution
-    // or partial cancel.
+    // Shares leaving a level without the order itself leaving: partial execution or
+    // partial cancel.
     void reduce(Side side, Price price, Shares shares) {
-        Levels& book = levels(side);
-        const auto it = book.find(price);
-        if (it == book.end()) return;
-
-        it->second.shares -= shares;
+        if (side == Side::Buy) {
+            bids_.reduce(price, shares);
+        } else {
+            asks_.reduce(price, shares);
+        }
     }
 
     void remove(Side side, Price price, Shares remaining_shares) {
-        Levels& book = levels(side);
-        const auto it = book.find(price);
-        if (it == book.end()) return;
-
-        it->second.shares -= remaining_shares;
-        if (--it->second.order_count == 0) book.erase(it);
+        if (side == Side::Buy) {
+            bids_.remove(price, remaining_shares);
+        } else {
+            asks_.remove(price, remaining_shares);
+        }
     }
 
     bool has_bid() const { return !bids_.empty(); }
     bool has_ask() const { return !asks_.empty(); }
 
-    Price best_bid() const { return bids_.rbegin()->first; }
-    Price best_ask() const { return asks_.begin()->first; }
+    Price best_bid() const { return bids_.best().price; }
+    Price best_ask() const { return asks_.best().price; }
 
-    const Level& best_bid_level() const { return bids_.rbegin()->second; }
-    const Level& best_ask_level() const { return asks_.begin()->second; }
+    const Level& best_bid_level() const { return bids_.best(); }
+    const Level& best_ask_level() const { return asks_.best(); }
 
-    const Levels& bids() const { return bids_; }
-    const Levels& asks() const { return asks_; }
+    const BidLevels& bids() const { return bids_; }
+    const AskLevels& asks() const { return asks_; }
 
     bool crossed() const { return has_bid() && has_ask() && best_bid() >= best_ask(); }
 
 private:
-    Levels& levels(Side side) { return side == Side::Buy ? bids_ : asks_; }
-
-    Levels bids_;
-    Levels asks_;
+    BidLevels bids_;
+    AskLevels asks_;
 };
 
 }  // namespace itch
