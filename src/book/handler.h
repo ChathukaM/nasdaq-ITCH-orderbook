@@ -1,8 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include <unordered_map>
 #include <vector>
+
+#include "book/order_map.h"
 
 #include "book/order_book.h"
 #include "itch/messages.h"
@@ -37,8 +38,12 @@ struct Stats {
 
 class BookHandler {
 public:
+    // Peak live orders is around 3M on a normal session; 2^23 slots keeps the load
+    // factor near 0.35, where linear probing stays close to a single probe.
+    static constexpr unsigned kOrderMapLog2 = 23;
+
     explicit BookHandler(const SymbolTable& symbols)
-        : symbols_(symbols), books_(SymbolTable::kLocateDomain) {}
+        : symbols_(symbols), orders_(kOrderMapLog2), books_(SymbolTable::kLocateDomain) {}
 
     void apply(const std::byte* payload) {
         switch (static_cast<char>(payload[0])) {
@@ -59,12 +64,12 @@ public:
     const SymbolTable& symbols() const { return symbols_; }
     const Stats& stats() const { return stats_; }
     std::size_t live_orders() const { return orders_.size(); }
-    const std::unordered_map<OrderRef, Order>& orders() const { return orders_; }
+    const OrderMap<Order>& orders() const { return orders_; }
 
 private:
     void on_add(const AddOrder& msg) {
         const OrderRef ref = msg.order_ref();
-        orders_[ref] = Order{msg.price(), msg.shares(), msg.locate(), msg.side()};
+        orders_.insert(ref, Order{msg.price(), msg.shares(), msg.locate(), msg.side()});
         books_[msg.locate()].add(msg.side(), msg.price(), msg.shares());
         ++stats_.orders_added;
     }
@@ -72,20 +77,20 @@ private:
     // Executions reduce the order at its own resting price. For 'C' the print may
     // occur at a different price, but the book is unaffected by that difference.
     void on_executed(const OrderExecuted& msg) {
-        const auto it = orders_.find(msg.order_ref());
-        if (it == orders_.end()) {
+        Order* found = orders_.find(msg.order_ref());
+        if (!found) {
             ++stats_.unknown_order_refs;
             return;
         }
 
-        Order& order = it->second;
+        Order& order = *found;
         const Shares executed = msg.executed_shares();
         ++stats_.executions;
         stats_.executed_shares += executed;
 
         if (executed >= order.shares) {
             books_[order.locate].remove(order.side, order.price, order.shares);
-            orders_.erase(it);
+            orders_.erase(msg.order_ref());
         } else {
             order.shares -= executed;
             books_[order.locate].reduce(order.side, order.price, executed);
@@ -95,19 +100,19 @@ private:
     void on_executed_price(const OrderExecutedPrice& msg) { on_executed(msg); }
 
     void on_cancel(const OrderCancel& msg) {
-        const auto it = orders_.find(msg.order_ref());
-        if (it == orders_.end()) {
+        Order* found = orders_.find(msg.order_ref());
+        if (!found) {
             ++stats_.unknown_order_refs;
             return;
         }
 
-        Order& order = it->second;
+        Order& order = *found;
         const Shares cancelled = msg.cancelled_shares();
         ++stats_.cancels;
 
         if (cancelled >= order.shares) {
             books_[order.locate].remove(order.side, order.price, order.shares);
-            orders_.erase(it);
+            orders_.erase(msg.order_ref());
         } else {
             order.shares -= cancelled;
             books_[order.locate].reduce(order.side, order.price, cancelled);
@@ -115,39 +120,38 @@ private:
     }
 
     void on_delete(const OrderDelete& msg) {
-        const auto it = orders_.find(msg.order_ref());
-        if (it == orders_.end()) {
+        const Order* order = orders_.find(msg.order_ref());
+        if (!order) {
             ++stats_.unknown_order_refs;
             return;
         }
 
-        const Order& order = it->second;
-        books_[order.locate].remove(order.side, order.price, order.shares);
-        orders_.erase(it);
+        books_[order->locate].remove(order->side, order->price, order->shares);
+        orders_.erase(msg.order_ref());
         ++stats_.orders_deleted;
     }
 
     // Replace carries no side or locate: the new order inherits both from the
     // original, which is another field only the order map can supply.
     void on_replace(const OrderReplace& msg) {
-        const auto it = orders_.find(msg.original_order_ref());
-        if (it == orders_.end()) {
+        const Order* found = orders_.find(msg.original_order_ref());
+        if (!found) {
             ++stats_.unknown_order_refs;
             return;
         }
 
-        const Order original = it->second;
+        const Order original = *found;
         books_[original.locate].remove(original.side, original.price, original.shares);
-        orders_.erase(it);
+        orders_.erase(msg.original_order_ref());
 
-        orders_[msg.new_order_ref()] =
-            Order{msg.price(), msg.shares(), original.locate, original.side};
+        orders_.insert(msg.new_order_ref(),
+                       Order{msg.price(), msg.shares(), original.locate, original.side});
         books_[original.locate].add(original.side, msg.price(), msg.shares());
         ++stats_.orders_replaced;
     }
 
     const SymbolTable& symbols_;
-    std::unordered_map<OrderRef, Order> orders_;
+    OrderMap<Order> orders_;
     std::vector<OrderBook> books_;
     Stats stats_;
 };
