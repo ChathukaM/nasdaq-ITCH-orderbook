@@ -28,7 +28,7 @@ memory and applying every event in sequence. That state, not the byte parsing, i
 | Symbols | 8,849 |
 | Replay time | 32.2 s (**8.8 M msg/s**) |
 | Book update cost | **68 ns/message** |
-| Peak memory | 2.9 GB |
+| Book state | ~190 MB (see below) |
 
 **Per-message latency** (M3 Pro; the host clock ticks at 24 MHz, so percentiles below ~100 ns
 are quantised at 41 ns and should be read as bounds rather than exact values):
@@ -59,10 +59,16 @@ Both containers were chosen naively at first, then replaced and measured. The bo
 fingerprint (below) was identical before and after, so the speedup came with no behavioural
 change.
 
-| | Book cost | Replay | Peak RSS |
-|---|---|---|---|
-| `std::unordered_map` + `std::map` | 185 ns/msg | 3.6 M msg/s | 5.9 GB |
-| Flat open-addressed map + sorted level arrays | **68 ns/msg** | **8.8 M msg/s** | **2.9 GB** |
+| | Book cost | Replay |
+|---|---|---|
+| `std::unordered_map` + `std::map` | 185 ns/msg | 3.6 M msg/s |
+| Flat open-addressed map + sorted level arrays | **68 ns/msg** | **8.8 M msg/s** |
+
+Process RSS is not quoted as a comparison: the input is memory-mapped, so resident file pages
+dominate it (~6 GB either way) and swamp the structures themselves. The flat containers are
+fixed and exactly measurable instead — 8,388,608 slots x 20 bytes = 168 MB for the order map,
+3.1 MB for the 65,536-entry book array, and 18.8 MB for the 784,619 live price levels at the
+15:00 snapshot. Roughly 190 MB total, allocated once, with no per-order heap node.
 
 **Order map.** `std::unordered_map` allocates each entry as a separate node, so a lookup
 follows a bucket pointer into memory that is almost certainly not cached — on a workload where
