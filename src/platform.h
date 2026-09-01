@@ -68,6 +68,17 @@ public:
             throw std::runtime_error("cannot mmap " + path + ": " + std::strerror(errno));
         }
         data_ = static_cast<const std::byte*>(addr);
+
+        // The replay is a single forward pass, so the kernel can read ahead and drop
+        // pages once passed. Measured as no change on macOS/APFS (70.4 vs 69.6 ns per
+        // message, within run-to-run noise); kept because it is free and Linux honours
+        // MADV_SEQUENTIAL more aggressively.
+#if defined(MADV_SEQUENTIAL)
+        ::madvise(addr, size_, MADV_SEQUENTIAL);
+#endif
+#if defined(MADV_WILLNEED)
+        ::madvise(addr, size_, MADV_WILLNEED);
+#endif
     }
 
     ~MappedFile() {
