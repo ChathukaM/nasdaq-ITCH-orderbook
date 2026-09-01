@@ -235,6 +235,10 @@ int replay(const itch::MappedFile& file, const std::vector<std::string>& watch,
 int bench(const itch::MappedFile& file, std::uint64_t limit, bool latency) {
     const itch::SymbolTable symbols = itch::build_symbol_table(file);
 
+    // Each phase is measured on a warm mapping so page-fault cost is not charged to
+    // whichever phase happens to run first.
+    itch::warm_pages(file, limit ? limit * 40 : 0);
+
     std::uint64_t sink = 0;
     const itch::PhaseResult framing = itch::bench_framing(file, limit);
     const itch::PhaseResult decode = itch::bench_decode(file, limit, sink);

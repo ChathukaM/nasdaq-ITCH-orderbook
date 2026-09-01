@@ -19,6 +19,20 @@ namespace itch {
 // are microseconds and comfortably above the noise floor.
 inline constexpr std::size_t kBatchSize = 1024;
 
+// The first pass over a cold mapping pays for every page fault, which would be
+// charged entirely to whichever phase ran first. Touching the pages up front moves
+// that cost outside the measured region so the phases are comparable.
+inline void warm_pages(const MappedFile& file, std::uint64_t byte_limit) {
+    const std::size_t page = 4096;
+    const std::size_t end = byte_limit ? std::min<std::size_t>(byte_limit, file.size())
+                                       : file.size();
+    volatile std::uint8_t sink = 0;
+    for (std::size_t offset = 0; offset < end; offset += page) {
+        sink ^= static_cast<std::uint8_t>(file.data()[offset]);
+    }
+    (void)sink;
+}
+
 struct PhaseResult {
     const char* name = "";
     std::uint64_t messages = 0;
