@@ -59,6 +59,7 @@ public:
     const SymbolTable& symbols() const { return symbols_; }
     const Stats& stats() const { return stats_; }
     std::size_t live_orders() const { return orders_.size(); }
+    const std::unordered_map<OrderRef, Order>& orders() const { return orders_; }
 
 private:
     void on_add(const AddOrder& msg) {
