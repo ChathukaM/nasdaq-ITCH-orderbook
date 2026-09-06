@@ -2,7 +2,9 @@
 
 A high-performance C++20 parser and limit order book implementation for historical Nasdaq TotalView-ITCH 5.0 data. It memory-maps a complete binary session, decodes each order event, and reconstructs full-depth bid and ask books for every instrument.
 
-The repository includes a command-line executable for inspecting messages and book state, replaying complete sessions, benchmarking parser and book-update performance, validating reconstruction, and analysing queue position.
+In trading systems, reconstructed books provide the market state used by market-making and execution algorithms, short-horizon signals, queue and liquidity analysis, risk controls, and feed-integrity monitoring. Historical reconstruction also supports session replay, execution modelling, and strategy backtesting.
+
+This repository focuses on the offline reconstruction layer. It includes a command-line executable for inspecting messages and book state, replaying complete sessions, benchmarking parser and book-update performance, validating reconstruction, and analysing queue position; it does not implement a trading strategy or submit orders.
 
 ## The problem
 
