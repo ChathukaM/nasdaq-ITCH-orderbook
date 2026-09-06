@@ -1,8 +1,8 @@
-# Nasdaq ITCH Order Book Reconstruction
+# Nasdaq ITCH Full-Depth Book Reconstruction
 
-A high-performance C++20 parser and limit order book reconstructor for Nasdaq TotalView-ITCH 5.0 binary data. It reads a complete trading-session feed, decodes each order event, and maintains full-depth bid and ask books for every instrument.
+A high-performance C++20 parser and limit order book implementation for historical Nasdaq TotalView-ITCH 5.0 data. It memory-maps a complete binary session, decodes each order event, and reconstructs full-depth bid and ask books for every instrument.
 
-Built around cache-friendly custom data structures, the executable supports message inspection, full-session replay, performance benchmarking, book validation, and queue-position analysis.
+The repository includes a command-line executable for inspecting messages and book state, replaying complete sessions, benchmarking parser and book-update performance, validating reconstruction, and analysing queue position.
 
 ## The problem
 
