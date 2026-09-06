@@ -12,17 +12,14 @@ This project converts that raw event stream into full-depth bid and ask books wh
 
 ## Performance
 
-Measured on an Apple M3 Pro using a release build and the 30 July 2019 Nasdaq sample file:
+Measured using release builds and the same 30 July 2019 Nasdaq sample file (8.66 GB, 282,229,684 messages, 8,849 instruments):
 
-| Metric | Result |
-|---|---:|
-| Input size | 8.66 GB |
-| Messages | 282,229,684 |
-| Instruments in Stock Directory | 8,849 |
-| Full-session replay | 32.4 s |
-| Replay throughput | 8.7 million messages/s |
-| Book-update benchmark | 68.1 ns/message |
-| In-memory book state at 15:00 | approximately 190 MB |
+| Platform | Processor | Full-session replay | Throughput | Book-update cost |
+|---|---|---:|---:|---:|
+| macOS | Apple M3 Pro | 32.4 s | 8.7 million msg/s | 68.1 ns/msg |
+| WSL2/Linux | AMD Ryzen 7 7800X3D | 21.55 s | 13.10 million msg/s | 69.3 ns/msg |
+
+The WSL2 replay result is the median of three runs (21.88, 21.55, and 21.29 seconds). All runs produced the same validated book-state fingerprint as macOS.
 
 The 8,849 directory entries are instruments available in the Nasdaq execution system on that day, including securities listed on other exchanges; they are not all Nasdaq-listed stocks.
 
