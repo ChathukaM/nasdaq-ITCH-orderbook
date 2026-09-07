@@ -1,4 +1,4 @@
-# Nasdaq ITCH Full-Depth Book Reconstruction
+# Nasdaq ITCH Book Reconstruction Engine
 
 A high-performance C++20 parser and limit order book implementation for historical Nasdaq TotalView-ITCH 5.0 data. It memory-maps a complete binary session, decodes each order event, and reconstructs full-depth bid and ask books for every instrument.
 
